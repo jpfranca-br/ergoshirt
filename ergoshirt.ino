@@ -4,7 +4,15 @@
 #define BLYNK_AUTH_TOKEN "<FILL_IN>"
 #define BLYNK_PRINT Serial
 
-// Include Libraries
+// Debugging functionality
+#define DEBUG // Comment to turn off debugging
+#ifdef DEBUG
+  #define PRINT(x) Serial.print(x)
+#else
+  #define PRINT(x)
+#endif
+
+// Include Libraries for WiFi and Blynk
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <BlynkSimpleEsp32.h>
@@ -14,189 +22,179 @@
 char ssid[] = "<FILL_IN>";
 char pass[] = "<FILL_IN>";
 
-// Define analog input pins. Using ESP32 C3 SuperMini
-// See pinout at https://www.sudo.is/docs/esphome/boards/esp32c3supermini/
-#define TIMER_PERIOD 100L
-#define SENDING_INTERVAL 20  // send to Blynk an average of the last X readings
+// Timer settings
+#define TIMER_PERIOD 500L // Period in milliseconds (500 ms)
+#define SENDING_INTERVAL 4 // Number of periods before sending average readings to Blynk
+
+// Number of sensors and actuators
 #define NUMBER_OF_SENSORS 3
 
-// Blynk Virtual Pin Definitions
-#define TERMINAL_PIN V0
-#define SENDING_INTERVAL_PIN V1
-#define TIMER_PERIOD_PIN V2
+// Pin configuration for ESP32-C3 SuperMini
+const int ANALOG_PIN[NUMBER_OF_SENSORS] = {0, 1, 2};
+const int DIGITAL_PIN[NUMBER_OF_SENSORS] = {21, 20, 10};
 
-#define VIRTUAL_PIN_SENSOR_0 V10
-#define VIRTUAL_PIN_SENSOR_1 V20
-#define VIRTUAL_PIN_SENSOR_2 V30
+// Blynk virtual pins
+const int TERMINAL_PIN = V0;
+const int SENDING_INTERVAL_PIN = V1;
+const int TIMER_PERIOD_PIN = V2;
+const int VIRTUAL_PIN_SENSOR[NUMBER_OF_SENSORS] = {V10, V20, V30};
+const int VIRTUAL_PIN_ACTUATOR[NUMBER_OF_SENSORS] = {V11, V21, V31};
+const int VIRTUAL_PIN_MAX[NUMBER_OF_SENSORS] = {V12, V22, V32};
+const int VIRTUAL_PIN_MIN[NUMBER_OF_SENSORS] = {V13, V23, V33};
 
-#define VIRTUAL_PIN_ACTUATOR_0 V11
-#define VIRTUAL_PIN_ACTUATOR_1 V21
-#define VIRTUAL_PIN_ACTUATOR_2 V31
+// Minimum gap between maximum and minimum values (hysteresis)
+const int MIN_GAP = 100;
 
-#define VIRTUAL_PIN_MAX_0 V12
-#define VIRTUAL_PIN_MAX_1 V22
-#define VIRTUAL_PIN_MAX_2 V32
-
-#define VIRTUAL_PIN_MIN_0 V13
-#define VIRTUAL_PIN_MIN_1 V23
-#define VIRTUAL_PIN_MIN_2 V33
-
-#define MIN_GAP 100
-
-int virtualPinMax[NUMBER_OF_SENSORS] = { VIRTUAL_PIN_MAX_0, VIRTUAL_PIN_MAX_1, VIRTUAL_PIN_MAX_2 };
-int virtualPinMin[NUMBER_OF_SENSORS] = { VIRTUAL_PIN_MIN_0, VIRTUAL_PIN_MIN_1, VIRTUAL_PIN_MIN_2 };
-
-// Analog Pin Definitions
-#define ANALOG_PIN_0 0
-#define ANALOG_PIN_1 1
-#define ANALOG_PIN_2 2
-
-// Create Constants
-int analogPin[NUMBER_OF_SENSORS];
-int virtualPinSensor[NUMBER_OF_SENSORS];
-int virtualPinActuator[NUMBER_OF_SENSORS];
-
-// Create Variables
+// Initialize variables
 int sensor[NUMBER_OF_SENSORS];
 int sensorAccumulator[NUMBER_OF_SENSORS];
-int targetMax[NUMBER_OF_SENSORS];
-int targetMin[NUMBER_OF_SENSORS];
+int targetMax[NUMBER_OF_SENSORS] = {4095, 4095, 4095};
+int targetMin[NUMBER_OF_SENSORS] = {2047, 2047, 2047};
 int sendingInterval = SENDING_INTERVAL;
 int timerPeriod = TIMER_PERIOD;
-bool actuator[NUMBER_OF_SENSORS];  // assuming one actuator per sensor
+bool actuator[NUMBER_OF_SENSORS];
 bool previousActuator;
-int j;
+int j = 0;
 int timerId;
 
-// Create Timer
+// Create Timer class
 BlynkTimer timer;
 
-// Read max and min values from Blynk
+// Blynk function to handle virtual pin writes
 BLYNK_WRITE_DEFAULT() {
   int pinValue = param.asInt();
   int pinNumber = request.pin;
-  // Find the index of the current pin in the virtualPinTarget array
-  int pinIndex = -1;
+  
+  // Update target max and min values from Blynk
   for (int i = 0; i < NUMBER_OF_SENSORS; i++) {
-    if (virtualPinMax[i] == pinNumber) {
+    if (VIRTUAL_PIN_MAX[i] == pinNumber) {
       targetMax[i] = pinValue;
       if (targetMax[i] - targetMin[i] < MIN_GAP) {
         targetMax[i] = min(targetMin[i] + MIN_GAP, 4095);
-        Blynk.virtualWrite(virtualPinMax[i], targetMax[i]);
+        Blynk.virtualWrite(VIRTUAL_PIN_MAX[i], targetMax[i]);
       }
       break;
     }
-    if (virtualPinMin[i] == pinNumber) {
+    if (VIRTUAL_PIN_MIN[i] == pinNumber) {
       targetMin[i] = pinValue;
       if (targetMax[i] - targetMin[i] < MIN_GAP) {
         targetMin[i] = max(targetMax[i] - MIN_GAP, 0);
-        Blynk.virtualWrite(virtualPinMin[i], targetMin[i]);
+        Blynk.virtualWrite(VIRTUAL_PIN_MIN[i], targetMin[i]);
       }
       break;
     }
   }
+  
+  // Update interval and period settings
   if (pinNumber == SENDING_INTERVAL_PIN) { 
     sendingInterval = pinValue; 
-  };
-  if (pinNumber == TIMER_PERIOD_PIN) {
+  } else if (pinNumber == TIMER_PERIOD_PIN) {
     timerPeriod = pinValue;
     timer.changeInterval(timerId, timerPeriod);
-  };
+  }
+  
+  // Print received value to terminal
   terminal("Valor recebido no Pin " + String(pinNumber) + ": " + String(pinValue) + "\n");
 }
 
-// Write to Blynk terminal
+// Function to print messages to Blynk terminal
 void terminal(String message) {
-  Serial.print(message);
+  PRINT(message);
   Blynk.virtualWrite(TERMINAL_PIN, message);
 }
 
-// Read analog sensors
+// Function to read analog sensors
 void readSensors() {
-  // Read analog values from A0, A1, and A2
-  // Serial.print("#" + String(j) + " - ");
+  PRINT(String(j * timerPeriod) + "ms - #" + String(j) + "/" + String(j) + " - ");
   for (int i = 0; i < NUMBER_OF_SENSORS; i++) {
-    sensor[i] = analogRead(analogPin[i]);
-    sensorAccumulator[i] = sensor[i] + sensorAccumulator[i];
-    // Serial.print(String(i) + ": " + String(sensor[i]) + ", ");
+    sensor[i] = analogRead(ANALOG_PIN[i]);
+    sensorAccumulator[i] += sensor[i];
+    PRINT(String(i) + ": " + String(sensor[i]) + ", ");
   }
-  //Serial.println();
+  PRINT("\n");
 }
 
+// Function to check sensor values and update actuators
 void checkInRange() {
   for (int i = 0; i < NUMBER_OF_SENSORS; i++) {
     previousActuator = actuator[i];
     actuator[i] = (sensor[i] > targetMax[i]) || (sensor[i] < targetMin[i]);
     if (previousActuator != actuator[i]) {
-      Blynk.virtualWrite(virtualPinActuator[i], actuator[i]);
+      Blynk.virtualWrite(VIRTUAL_PIN_ACTUATOR[i], actuator[i]);
+      digitalWrite(DIGITAL_PIN[i], actuator[i]);
     }
   }
 }
 
+// Alternative function to check sensor values and update actuators
+void checkInRange_alt() {
+  for (int i = 0; i < NUMBER_OF_SENSORS; i++) {
+    previousActuator = actuator[i];
+    actuator[i] = (sensor[i] > targetMax[i]) || (sensor[i] < targetMin[i]);
+    if (previousActuator != actuator[i]) {
+      Blynk.virtualWrite(VIRTUAL_PIN_ACTUATOR[i], actuator[i]);
+    }
+  }
+  
+  bool compare = false;
+  for (int i = 0; i < NUMBER_OF_SENSORS; i++) {
+    compare = compare || actuator[i];
+  }
+  for (int i = 0; i < NUMBER_OF_SENSORS; i++) {
+    digitalWrite(DIGITAL_PIN[i], compare);
+  }
+}
+
+// Function to calculate average sensor readings and send to Blynk
 void sendToBlynk() {
   if (j >= sendingInterval) {
-    //Serial.println();
-    //Serial.println("Enviado para a Blynk após " + String(j) + " leituras de " + String(timerPeriod) + " ms");
+    PRINT("\nEnviando para a Blynk após " + String(j) + " leituras de " + String(timerPeriod) + " ms\n");
     for (int i = 0; i < NUMBER_OF_SENSORS; i++) {
-      Blynk.virtualWrite(virtualPinSensor[i], sensorAccumulator[i] / j);
-      String message = String(sensorAccumulator[i] / j) + "(" + String(targetMin[i]) + "," + String(targetMax[i]) + ") | " ;
-      Serial.print(message);
+      Blynk.virtualWrite(VIRTUAL_PIN_SENSOR[i], sensorAccumulator[i] / j);
+      String message = String(sensorAccumulator[i] / j) + "(" + String(targetMin[i]) + "," + String(targetMax[i]) + ") | ";
+      PRINT(message);
     }
-    Serial.print("\n");
+    PRINT("\n\n");
     j = 0;
-    for (int i = 0; i < NUMBER_OF_SENSORS; i++) { sensorAccumulator[i] = 0; };
+    for (int i = 0; i < NUMBER_OF_SENSORS; i++) { sensorAccumulator[i] = 0; }
   }
 }
 
-//
+// Function to check Blynk connection and reconnect if needed
 void checkBlynk() {
   if (!Blynk.connected()) {
-    Serial.println("Blynk is not connected. Attempting to reconnect...");
+    PRINT("Blynk não conectado. Tentando reconectar...");
     Blynk.connect();
   }
 }
 
-//
+// Main function to be called periodically by the timer
 void mainFunction() {
   j++;
-  //Serial.print(String(j*timerPeriod)+"ms.");
-  //Serial.print(".");
   readSensors();
-  checkInRange();
+  checkInRange_alt();
   checkBlynk();
   sendToBlynk();
 }
 
-//
+// Setup function
 void setup() {
-  // Initialize debug console and set baudrate
+  // Initialize Serial for debugging
   Serial.begin(115200);
 
-  // Initialize Analog Input pins
-  analogPin[0] = ANALOG_PIN_0;
-  analogPin[1] = ANALOG_PIN_1;
-  analogPin[2] = ANALOG_PIN_2;
-
-  // Configure Analog pins as input (optional as it's the default state)
+  // Configure pins
   for (int i = 0; i < NUMBER_OF_SENSORS; i++) {
-    pinMode(analogPin[i], INPUT);
+    pinMode(ANALOG_PIN[i], INPUT);
+    pinMode(DIGITAL_PIN[i], OUTPUT);
   }
 
-  // Initialize Blynk Virtual pins
-  virtualPinSensor[0] = VIRTUAL_PIN_SENSOR_0;
-  virtualPinSensor[1] = VIRTUAL_PIN_SENSOR_1;
-  virtualPinSensor[2] = VIRTUAL_PIN_SENSOR_2;
-  virtualPinActuator[0] = VIRTUAL_PIN_ACTUATOR_0;
-  virtualPinActuator[1] = VIRTUAL_PIN_ACTUATOR_1;
-  virtualPinActuator[2] = VIRTUAL_PIN_ACTUATOR_2;
-
-  j = 0;
-
+  // Connect to WiFi and Blynk
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
-  // Setup a non blocking timer function
+  // Setup timer to call mainFunction periodically
   timerId = timer.setInterval(timerPeriod, mainFunction);
 
+  // Sync initial values from Blynk and send default variables
   Blynk.run();
   Blynk.syncAll();
   terminal("Iniciando\n");
@@ -204,8 +202,8 @@ void setup() {
   Blynk.virtualWrite(V2, timerPeriod);
 }
 
-//
+// Main loop
 void loop() {
   Blynk.run();
-  timer.run();  // Initiates BlynkTimer
+  timer.run();  // Run BlynkTimer
 }
