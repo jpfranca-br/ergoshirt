@@ -22,3 +22,6 @@ Project advisor: Professor [Débora Cardador](https://www.linkedin.com/in/debora
 ## Demo
 
 Click here to [watch a demo video](https://github.com/jpfranca-br/ergoshirt/raw/main/video/demo.mp4) of the working prototype.
+
+![Logo](https://github.com/jpfranca-br/ergoshirt/blob/d7720c103ec5992e9aadd7513e748098fd0baf94/images/prototype.png?raw=true)
+
