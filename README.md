@@ -18,20 +18,17 @@ This project is a **Proof of Concept (PoC)**. Parameters for the Blynk platform 
 
 ---
 
-## Authors  
-
-- [Ana Paula Marcatto](https://www.linkedin.com/in/ana-paula-marcatto-627a84257/)  
-- [Fabio Silva](https://www.linkedin.com/in/fabio-silva-6674baa/)  
-- [Gustavo Fontinha](https://www.linkedin.com/in/gustavo-fontinha-7209a13/)  
-- [JP França](https://github.com/jpfranca-br)  
-- [Luis Jairo de Souza Jr](https://www.linkedin.com/in/luisjairojr/)  
-- [Mauricio Stelling](https://www.linkedin.com/in/mauriciostelling/)  
-- [Rodrigo Uchôa](https://www.linkedin.com/in/rcuchoa/)  
-- [Silmar Reis](https://www.linkedin.com/in/silmar-reis/)  
-
-## Project Advisor  
-
-Professor [Débora Cardador](https://www.linkedin.com/in/debora-cardador/)  
+## Contributors
+- **Professor**: [Dra. Débora Cardador](https://www.linkedin.com/in/debora-cardador/)
+- **Team Members**:
+  - [Ana Paula Marcatto](https://www.linkedin.com/in/ana-paula-marcatto-627a84257/)  
+  - [Fabio Silva](https://www.linkedin.com/in/fabio-silva-6674baa/)  
+  - [Gustavo Fontinha](https://www.linkedin.com/in/gustavo-fontinha-7209a13/)  
+  - [João Paulo M. França](https://www.linkedin.com/in/jpfranca)  
+  - [Luis Jairo de Souza Jr](https://www.linkedin.com/in/luisjairojr/)  
+  - [Mauricio Stelling](https://www.linkedin.com/in/mauriciostelling/)  
+  - [Rodrigo Uchôa](https://www.linkedin.com/in/rcuchoa/)  
+  - [Silmar Reis](https://www.linkedin.com/in/silmar-reis/)  
 
 ---
 
